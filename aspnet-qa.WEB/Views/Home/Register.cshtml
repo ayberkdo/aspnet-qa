@@ -1,0 +1,111 @@
+﻿@{
+    Layout = null;
+}
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Soru-Cevap Portalı - Kayıt Ol</title>
+    <link href="/sbadmin/vendor/fontawesome-free/css/all.min.css" rel="stylesheet" type="text/css">
+    <link href="/sbadmin/css/sb-admin-2.min.css" rel="stylesheet">
+</head>
+
+<body class="bg-gradient-primary">
+    <div class="container">
+        <div class="card o-hidden border-0 shadow-lg my-5">
+            <div class="card-body p-0">
+                <div class="row">
+                    <div class="col-lg-12">
+                        <div class="p-5">
+                            <div class="text-center">
+                                <h1 class="h4 text-gray-900 mb-4">Yeni Hesap Oluştur!</h1>
+                            </div>
+                            <form class="user">
+                                <div class="form-group row">
+                                    <div class="col-sm-6 mb-3 mb-sm-0">
+                                        <input type="text" class="form-control form-control-user" id="txtFullName" placeholder="Ad Soyad">
+                                    </div>
+                                    <div class="col-sm-6">
+                                        <input type="text" class="form-control form-control-user" id="txtUserName" placeholder="Kullanıcı Adı">
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <input type="email" class="form-control form-control-user" id="txtEmail" placeholder="E-Posta Adresi">
+                                </div>
+                                <div class="form-group row">
+                                    <div class="col-sm-6 mb-3 mb-sm-0">
+                                        <input type="text" class="form-control form-control-user" id="txtPhone" placeholder="Telefon Numarası">
+                                    </div>
+                                    <div class="col-sm-6">
+                                        <input type="password" class="form-control form-control-user" id="txtPassword" placeholder="Parola">
+                                    </div>
+                                </div>
+                                <button type="button" id="btnRegister" class="btn btn-primary btn-user btn-block">
+                                    Kayıt Ol
+                                </button>
+                            </form>
+                            <hr>
+                            <div id="divResult"></div>
+                            <div class="text-center">
+                                <a class="small" href="/Login">Zaten bir hesabın var mı? Giriş yap!</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="~/lib/jquery/dist/jquery.js"></script>
+
+
+    <script>
+        $(document).ready(function () {
+            var apiBaseUrl = "@ViewBag.ApiBaseURL";
+
+            $("#btnRegister").click(function () {
+                // Obje oluşturma (RegisterDto ile birebir aynı isimler olmalı)
+                var user = {
+                    FullName: $("#txtFullName").val(),
+                    UserName: $("#txtUserName").val(),
+                    Email: $("#txtEmail").val(),
+                    PhoneNumber: $("#txtPhone").val(),
+                    Password: $("#txtPassword").val()
+                };
+
+                // Basit bir boşluk kontrolü
+                if (!user.UserName || !user.Password || !user.Email) {
+                    showResult(false, "Lütfen zorunlu alanları doldurunuz!");
+                    return;
+                }
+
+                $.ajax({
+                    url: apiBaseUrl + "/User/SignUp", // API'deki endpoint adresi (SignUp da olabilir kontrol et)
+                    type: "POST",
+                    data: JSON.stringify(user),
+                    contentType: "application/json",
+                    success: function (res) {
+                        if (res.status) {
+                            showResult(true, "Kayıt başarılı! Giriş sayfasına yönlendiriliyorsunuz...");
+                            setTimeout(function () {
+                                location.href = "/Login";
+                            }, 2000);
+                        } else {
+                            showResult(false, res.message);
+                        }
+                    },
+                    error: function () {
+                        showResult(false, "Bir hata oluştu!");
+                    }
+                });
+            });
+
+            function showResult(status, message) {
+                var cls = status ? "alert-success" : "alert-danger";
+                $("#divResult").fadeIn().removeClass().addClass("alert " + cls).html(message);
+            }
+        });
+    </script>
+</body>
+</html>

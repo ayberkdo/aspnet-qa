@@ -1,0 +1,235 @@
+﻿@{
+    ViewData["Title"] = "Anasayfa";
+    var apiBaseUrl = ViewBag.ApiBaseURL as string ?? "";
+}
+
+<div class="container py-4">
+    <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3 mb-4">
+        <div>
+            <h1 class="h3 fw-bold mb-1">Son 24 Saatte Eklenen Sorular</h1>
+            <p class="text-muted mb-0">Güncel soruları hızlıca takip et.</p>
+        </div>
+        <span id="questionCount" class="badge rounded-pill text-bg-primary fs-6 px-3 py-2">0 soru</span>
+    </div>
+
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-body">
+            <div class="input-group">
+                <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
+                <input id="txtSearch" type="text" class="form-control" placeholder="Başlık veya içerik ara..." />
+            </div>
+        </div>
+    </div>
+
+    <div id="loadingBox" class="text-center py-5">
+        <div class="spinner-border text-primary" role="status"></div>
+        <p class="text-muted mt-3 mb-0">Sorular yükleniyor...</p>
+    </div>
+
+    <div id="emptyBox" class="alert alert-light border text-center d-none">
+        Son 24 saatte eklenmiş soru bulunamadı.
+    </div>
+
+    <div id="questionsList" class="d-grid gap-3"></div>
+</div>
+
+<style>
+    .question-content {
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+
+    .meta-box {
+        min-width: 88px;
+    }
+
+    .question-card {
+        transition: all .2s ease;
+    }
+
+    .question-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 .75rem 1.5rem rgba(0, 0, 0, .08) !important;
+    }
+</style>
+
+@section Scripts {
+    <script>
+        $(function () {
+            const apiBaseUrl = "@apiBaseUrl";
+            const cleanApiBaseUrl = apiBaseUrl.endsWith("/") ? apiBaseUrl.slice(0, -1) : apiBaseUrl;
+            const apiOrigin = cleanApiBaseUrl ? new URL(cleanApiBaseUrl).origin : "";
+            const defaultPhoto = "/Files/UserPhotos/default-profile-photo.jpg";
+
+            let allQuestions = [];
+
+            function toRelativeTime(dateValue) {
+                const dt = new Date(dateValue);
+                if (Number.isNaN(dt.getTime())) return "Bilinmiyor";
+
+                const sec = Math.floor((Date.now() - dt.getTime()) / 1000);
+                if (sec < 60) return "Az önce";
+
+                const min = Math.floor(sec / 60);
+                if (min < 60) return `${min} dakika önce`;
+
+                const hour = Math.floor(min / 60);
+                if (hour < 24) return `${hour} saat önce`;
+
+                const day = Math.floor(hour / 24);
+                if (day < 7) return `${day} gün önce`;
+
+                const week = Math.floor(day / 7);
+                if (week < 5) return `${week} hafta önce`;
+
+                const month = Math.floor(day / 30);
+                if (month < 12) return `${month} ay önce`;
+
+                const year = Math.floor(day / 365);
+                return `${year} yıl önce`;
+            }
+
+            function normalizePhoto(photoUrl) {
+                const val = (photoUrl || "").trim();
+                if (!val) return defaultPhoto;
+
+                if (val.startsWith("http://") || val.startsWith("https://")) return val;
+                if (!apiOrigin) return defaultPhoto;
+
+                if (val.startsWith("/Files/")) return apiOrigin + val;
+                return apiOrigin + "/Files/UserPhotos/" + val.replace(/^\/+/, "");
+            }
+
+            function isLast24Hours(created) {
+                const dt = new Date(created);
+                if (Number.isNaN(dt.getTime())) return false;
+
+                const diffMs = Date.now() - dt.getTime();
+                return diffMs >= 0 && diffMs <= (24 * 60 * 60 * 1000);
+            }
+
+            function normalizeQuestion(q) {
+                return {
+                    id: q.id,
+                    title: q.title || "-",
+                    content: q.content || "",
+                    viewCount: Number(q.viewCount) || 0,
+                    score: Number(q.score) || 0,
+                    answerCount: Number(q.answerCount) || 0,
+                    authorName: q.authorName || "Kullanıcı",
+                    authorUserName: q.authorUserName || q.authorName || "kullanici",
+                    authorPhotoUrl: normalizePhoto(q.authorPhotoUrl),
+                    created: q.created,
+                    tags: Array.isArray(q.tags) ? q.tags : []
+                };
+            }
+
+            function applySearchAndRender() {
+                const search = ($("#txtSearch").val() || "").toString().trim().toLowerCase();
+
+                const data = allQuestions
+                    .filter(q => isLast24Hours(q.created))
+                    .filter(q =>
+                        q.title.toLowerCase().includes(search) ||
+                        q.content.toLowerCase().includes(search))
+                    .sort((a, b) => new Date(b.created) - new Date(a.created));
+
+                render(data);
+            }
+
+            function render(list) {
+                const $list = $("#questionsList");
+                const $empty = $("#emptyBox");
+
+                $list.empty();
+
+                if (!list.length) {
+                    $("#questionCount").text("0 soru");
+                    $empty.removeClass("d-none");
+                    return;
+                }
+
+                $empty.addClass("d-none");
+                $("#questionCount").text(`${list.length} soru`);
+
+                list.forEach(q => {
+                    const tagsHtml = q.tags.length
+                        ? q.tags.map(t => `<span class="badge text-bg-light border me-1 mb-1">#${t.name}</span>`).join("")
+                        : `<span class="text-muted small">Etiket yok</span>`;
+
+                    const html = `
+                        <div class="card question-card border-0 shadow-sm">
+                            <div class="card-body">
+                                <div class="d-flex flex-column flex-lg-row gap-3">
+                                    <div class="d-flex flex-lg-column gap-2">
+                                        <div class="meta-box border rounded-3 p-2 text-center">
+                                            <div class="fw-bold">${q.score}</div>
+                                            <small class="text-muted">Vote</small>
+                                        </div>
+                                        <div class="meta-box border rounded-3 p-2 text-center">
+                                            <div class="fw-bold">${q.answerCount}</div>
+                                            <small class="text-muted">Cevap</small>
+                                        </div>
+                                        <div class="meta-box border rounded-3 p-2 text-center">
+                                            <div class="fw-bold">${q.viewCount}</div>
+                                            <small class="text-muted">Görüntüleme</small>
+                                        </div>
+                                    </div>
+
+                                    <div class="flex-grow-1">
+                                        <h5 class="fw-bold mb-2">${q.title}</h5>
+                                        <p class="text-muted question-content mb-3">${q.content}</p>
+
+                                        <div class="mb-3">${tagsHtml}</div>
+
+                                        <div class="d-flex align-items-center gap-2">
+                                            <img src="${q.authorPhotoUrl}"
+                                                 class="rounded-circle border"
+                                                 style="width:32px;height:32px;object-fit:cover;"
+                                                 onerror="this.onerror=null;this.src='${defaultPhoto}';"
+                                                 alt="${q.authorUserName}" />
+                                            <div class="small text-muted">
+                                                <strong class="text-dark">@@${q.authorUserName}</strong> · ${toRelativeTime(q.created)}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>`;
+
+                    $list.append(html);
+                });
+            }
+
+            function loadQuestions() {
+                $("#loadingBox").removeClass("d-none");
+                $("#emptyBox").addClass("d-none");
+                $("#questionsList").empty();
+
+                $.ajax({
+                    url: cleanApiBaseUrl + "/Question",
+                    type: "GET",
+                    success: function (res) {
+                        allQuestions = (Array.isArray(res) ? res : []).map(normalizeQuestion);
+                        applySearchAndRender();
+                    },
+                    error: function () {
+                        allQuestions = [];
+                        render([]);
+                        $("#emptyBox").removeClass("d-none").text("Sorular alınamadı. Lütfen tekrar deneyin.");
+                    },
+                    complete: function () {
+                        $("#loadingBox").addClass("d-none");
+                    }
+                });
+            }
+
+            $("#txtSearch").on("input", applySearchAndRender);
+
+            loadQuestions();
+        });
+    </script>
+}

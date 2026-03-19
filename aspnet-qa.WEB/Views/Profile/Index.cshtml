@@ -1,0 +1,121 @@
+﻿@{
+    ViewData["Title"] = "Profilim";
+    var apiBaseUrl = ViewBag.ApiBaseURL;
+    Layout = null;
+}
+
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card shadow-lg border-0 rounded-4">
+
+                <div id="loading-spinner" class="text-center p-5">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Yükleniyor...</span>
+                    </div>
+                </div>
+
+                <div class="card-body text-center p-5" id="profile-card" style="display: none;">
+
+                    <div class="mb-4">
+                        <img id="profile-image" src="" class="rounded-circle img-thumbnail shadow-sm" style="width: 150px; height: 150px; object-fit: cover;" alt="Profil Fotoğrafı">
+                    </div>
+
+                    <h2 class="fw-bold mb-1" id="profile-fullname"></h2>
+                    <div class="mb-3">
+                        <span class="text-muted" id="profile-username"></span>
+                        <span id="profile-role" class="badge ms-2"></span>
+                    </div>
+
+                    <p class="text-secondary mb-4" id="profile-email"></p>
+
+                    <hr class="my-4">
+
+                    <div class="d-grid gap-2" id="action-buttons"></div>
+
+                    <button id="btnLogout" class="btn btn-link text-danger text-decoration-none mt-2">
+                        <i class="bi bi-box-arrow-right me-1"></i>Güvenli Çıkış Yap
+                    </button>
+
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="~/lib/jquery/dist/jquery.js"></script>
+
+<script>
+    $(document).ready(function () {
+        console.log("Script çalışmaya başladı..."); // Kontrol için
+        var apiBaseUrl = "@apiBaseUrl";
+        var token = localStorage.getItem("token");
+
+        if (!token) {
+            window.location.href = "/Login";
+            return;
+        }
+
+        // URL'i temizleyelim (Fazla slash hatasını önlemek için)
+        var cleanUrl = apiBaseUrl.endsWith('/') ? apiBaseUrl.slice(0, -1) : apiBaseUrl;
+
+        $.ajax({
+            url: cleanUrl + "/User/GetProfile",
+            type: "GET",
+            headers: { "Authorization": "Bearer " + token },
+            success: function (d) {
+                console.log("Veri geldi:", d);
+                $("#profile-fullname").text(d.fullName);
+                $("#profile-username").text("@@" + d.username);
+                $("#profile-email").text(d.email);
+                $("#profile-image").attr("src", d.profileImageUrl);
+
+                if (d.role === "Admin") {
+                    $("#profile-role").text(d.role).addClass("bg-danger");
+                    $("#action-buttons").html('<a href="/Tags/Index" class="btn btn-dark btn-lg rounded-pill">Sistemi Yönet</a>');
+                } else {
+                    $("#profile-role").text(d.role).addClass("bg-primary");
+                    $("#action-buttons").html('<a href="/Questions/MyQuestions" class="btn btn-outline-primary btn-lg rounded-pill">Sorularım</a>');
+                }
+
+                $("#loading-spinner").hide();
+                $("#profile-card").fadeIn(500);
+            },
+            error: function (xhr) {
+                console.error("AJAX Hatası:", xhr);
+                alert("Veri çekilemedi!");
+                $("#loading-spinner").hide();
+            }
+        });
+
+        $("#btnLogout").click(function () {
+            var token = localStorage.getItem("token");
+            var apiBaseUrl = "@ViewBag.ApiBaseURL";
+
+            $.ajax({
+                url: apiBaseUrl + "/User/Logout",
+                type: "POST",
+                headers: {
+                    "Authorization": "Bearer " + token
+                },
+                success: function (d) {
+                    // 1. API tarafı okey dedi
+                    console.log(d.message);
+
+                    // 2. İstemci tarafındaki izleri SİL (En kritik adım)
+                    localStorage.removeItem("token");
+                    localStorage.clear();
+                    sessionStorage.clear();
+
+                    // 3. Yönlendir
+                    window.location.href = "/Login";
+                },
+                error: function () {
+                    // API hata verse bile biz local'i silip kullanıcıyı dışarı atmalıyız
+                    localStorage.removeItem("token");
+                    window.location.href = "/Login";
+                }
+            });
+        });
+    });
+</script>

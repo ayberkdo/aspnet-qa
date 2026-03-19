@@ -1,0 +1,208 @@
+﻿@inject IConfiguration Configuration
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] - Q&A Portal</title>
+
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+
+    <style>
+        body {
+            overflow-x: hidden;
+            background-color: #f8f9fa;
+        }
+
+        #wrapper {
+            display: flex;
+            width: 100%;
+        }
+
+        #sidebar-wrapper {
+            min-height: 100vh;
+            width: 250px;
+            background-color: #ffffff;
+            border-right: 1px solid #dee2e6;
+            transition: margin .25s ease-out;
+        }
+
+            #sidebar-wrapper .sidebar-heading {
+                padding: 1.5rem 1.25rem;
+                font-size: 1.2rem;
+                font-weight: bold;
+                color: #0d6efd;
+                border-bottom: 1px solid #dee2e6;
+            }
+
+            #sidebar-wrapper .list-group {
+                width: 250px;
+            }
+
+        .nav-link {
+            padding: 0.8rem 1.25rem;
+            color: #495057;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: all 0.2s;
+        }
+
+            .nav-link:hover {
+                background-color: #e9ecef;
+                color: #0d6efd;
+            }
+
+            .nav-link.active {
+                background-color: #cfe2ff;
+                color: #0d6efd;
+                font-weight: 600;
+            }
+
+        #page-content-wrapper {
+            width: 100%;
+            padding: 20px;
+        }
+
+        footer {
+            margin-top: auto;
+            background: white;
+            padding: 15px 0;
+            border-top: 1px solid #dee2e6;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="wrapper">
+        <div id="sidebar-wrapper" style="position: fixed;">
+            <div class="sidebar-heading">
+                <a asp-controller="Home" asp-action="Index" class="text-decoration-none">FastQA</a>
+            </div>
+            <div class="list-group list-group-flush">
+                <a class="nav-link" asp-controller="Home" asp-action="Index">
+                    <i class="bi bi-house-door"></i> Ana Sayfa
+                </a>
+                <a class="nav-link" asp-controller="Home" asp-action="Questions">
+                    <i class="bi bi-question-circle"></i> Sorular
+                </a>
+                <a class="nav-link" asp-controller="Home" asp-action="Tags">
+                    <i class="bi bi-tags"></i> Etiketler
+                </a>
+                <a class="nav-link" asp-controller="Home" asp-action="Users">
+                    <i class="bi bi-people"></i> Kullanıcılar
+                </a>
+
+                <div id="guest-menu" class="d-none">
+                    <hr class="mx-3 my-2">
+                    <a class="nav-link" asp-controller="Home" asp-action="Login">
+                        <i class="bi bi-box-arrow-in-right"></i> Giriş Yap
+                    </a>
+                    <a class="nav-link" asp-controller="Home" asp-action="Register">
+                        <i class="bi bi-person-plus"></i> Kayıt Ol
+                    </a>
+                </div>
+
+                <div id="auth-menu" class="d-none">
+                    <hr class="mx-3 my-2">
+                    <a class="nav-link" asp-controller="Profile" asp-action="Index">
+                        <i class="bi bi-person-circle"></i> Profilim
+                    </a>
+                    <button type="button" id="btnSidebarLogout" class="nav-link border-0 bg-transparent w-100 text-start">
+                        <i class="bi bi-box-arrow-right"></i> Çıkış Yap
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div id="page-content-wrapper" class="d-flex flex-column">
+            <main role="main" class="flex-shrink-0">
+                <div class="container-fluid">
+                    @RenderBody()
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="~/js/site.js" asp-append-version="true"></script>
+
+    <script>
+        $(function () {
+            const apiBaseUrlRaw = "@(Configuration["ApiBaseURL"] ?? string.Empty)";
+            const apiBaseUrl = apiBaseUrlRaw.endsWith("/") ? apiBaseUrlRaw.slice(0, -1) : apiBaseUrlRaw;
+
+            const $guestMenu = $("#guest-menu");
+            const $authMenu = $("#auth-menu");
+
+            function showGuestMenu() {
+                $authMenu.addClass("d-none");
+                $guestMenu.removeClass("d-none");
+            }
+
+            function showAuthMenu() {
+                $guestMenu.addClass("d-none");
+                $authMenu.removeClass("d-none");
+            }
+
+            function clearClientSession() {
+                localStorage.removeItem("token");
+                sessionStorage.clear();
+            }
+
+            function getToken() {
+                return localStorage.getItem("token");
+            }
+
+            function validateSession() {
+                const token = getToken();
+
+                if (!token || !apiBaseUrl) {
+                    showGuestMenu();
+                    return;
+                }
+
+                $.ajax({
+                    url: apiBaseUrl + "/User/GetProfile",
+                    type: "GET",
+                    headers: { "Authorization": "Bearer " + token },
+                    success: function () {
+                        showAuthMenu();
+                    },
+                    error: function () {
+                        clearClientSession();
+                        showGuestMenu();
+                    }
+                });
+            }
+
+            $("#btnSidebarLogout").on("click", function () {
+                const token = getToken();
+
+                if (!token || !apiBaseUrl) {
+                    clearClientSession();
+                    window.location.href = "/Login";
+                    return;
+                }
+
+                $.ajax({
+                    url: apiBaseUrl + "/User/Logout",
+                    type: "POST",
+                    headers: { "Authorization": "Bearer " + token },
+                    complete: function () {
+                        clearClientSession();
+                        window.location.href = "/Login";
+                    }
+                });
+            });
+
+            validateSession();
+        });
+    </script>
+
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

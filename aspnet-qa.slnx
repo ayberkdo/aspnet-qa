@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="aspnet-qa.API/aspnet-qa.API.csproj" />
+  <Project Path="aspnet-qa.WEB/aspnet-qa.WEB.csproj" />
+</Solution>

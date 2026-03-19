@@ -1,0 +1,182 @@
+﻿@{
+    ViewData["Title"] = "Kullanıcılar";
+}
+
+<div class="container py-4">
+    <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3 mb-4">
+        <div>
+            <h1 class="h3 fw-bold mb-1">Kullanıcılar</h1>
+            <p class="text-muted mb-0">Topluluktaki üyeleri keşfet, ara ve filtrele.</p>
+        </div>
+        <span id="userCount" class="badge rounded-pill text-bg-primary fs-6 px-3 py-2">0 kullanıcı</span>
+    </div>
+
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-12 col-lg-6">
+                    <div class="input-group">
+                        <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
+                        <input id="txtSearch" type="text" class="form-control" placeholder="Kullanıcı adına göre ara..." />
+                    </div>
+                </div>
+                <div class="col-12 col-lg-6">
+                    <div class="d-flex flex-wrap gap-2 justify-content-lg-end">
+                        <button type="button" class="btn btn-primary filter-btn active" data-filter="all">Tüm kullanıcılar</button>
+                        <button type="button" class="btn btn-outline-primary filter-btn" data-filter="new">Yeni kullanıcılar</button>
+                        <button type="button" class="btn btn-outline-primary filter-btn" data-filter="admin">Adminler</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="loadingBox" class="text-center py-5">
+        <div class="spinner-border text-primary" role="status"></div>
+        <p class="text-muted mt-3 mb-0">Kullanıcılar yükleniyor...</p>
+    </div>
+
+    <div id="emptyBox" class="alert alert-light border text-center d-none">
+        Arama/filtreye uygun kullanıcı bulunamadı.
+    </div>
+
+    <div id="usersGrid" class="row g-4"></div>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function () {
+            // URL işlemlerini basitleştirdik, direkt değişkene bağladık
+            const apiBaseUrl = "@ViewBag.ApiBaseURL";
+            const DEFAULT_PHOTO = "/Files/UserPhotos/default-profile-photo.jpg";
+            const NEW_USER_DAYS = 30;
+
+            let allUsers = [];
+            let activeFilter = "all";
+
+            const $loadingBox = $("#loadingBox");
+            const $emptyBox = $("#emptyBox");
+            const $usersGrid = $("#usersGrid");
+            const $userCount = $("#userCount");
+
+            // Fotoğraf yolunu düzenleyen fonksiyon (Artık apiOrigin bağımlılığı yok)
+            function normalizePhoto(photoUrl) {
+                if (!photoUrl || photoUrl.trim() === "") {
+                    return DEFAULT_PHOTO;
+                }
+
+                // Değilse, gelen değeri olduğu gibi kullan
+                return photoUrl;
+            }
+
+            function formatDate(dateValue) {
+                if (!dateValue) return "Katılım tarihi bilinmiyor";
+                const dt = new Date(dateValue);
+                if (Number.isNaN(dt.getTime()) || dt.getFullYear() < 2000) return "Katılım tarihi bilinmiyor";
+                return dt.toLocaleDateString("tr-TR", { year: "numeric", month: "long", day: "numeric" });
+            }
+
+            function isNewUser(user) {
+                if (!user.createdAt) return false;
+                const dt = new Date(user.createdAt);
+                if (Number.isNaN(dt.getTime()) || dt.getFullYear() < 2000) return false;
+                const diffDays = (Date.now() - dt.getTime()) / (1000 * 60 * 60 * 24);
+                return diffDays <= NEW_USER_DAYS;
+            }
+
+            function renderUsers(list) {
+                $usersGrid.empty();
+
+                if (!list.length) {
+                    $emptyBox.removeClass("d-none");
+                    $userCount.text("0 kullanıcı");
+                    return;
+                }
+
+                $emptyBox.addClass("d-none");
+                $userCount.text(`${list.length} kullanıcı`);
+
+                list.forEach(function (u) {
+                    const role = (u.role || "User").trim();
+                    const roleBadge = role.toLowerCase() === "admin"
+                        ? `<span class="badge text-bg-warning">Admin</span>`
+                        : `<span class="badge text-bg-secondary">${role}</span>`;
+
+                    const card = `
+                        <div class="col-12 col-sm-6 col-lg-3">
+                            <div class="card h-100 border-0 shadow-sm rounded-4">
+                                <div class="card-body text-center p-4">
+                                    <img src="${normalizePhoto(u.photoUrl)}"
+                                            alt="${u.userName || "Kullanıcı"}"
+                                            class="rounded-circle border shadow-sm mb-3"
+                                            style="width:88px;height:88px;object-fit:cover;"
+                                            onerror="this.onerror=null;this.src='${DEFAULT_PHOTO}';" />
+                                    <h6 class="fw-bold mb-1">@@${u.userName || "-"}</h6>
+                                    <div class="text-muted small mb-2">${formatDate(u.createdAt)}</div>
+                                    ${roleBadge}
+                                </div>
+                            </div>
+                        </div>`;
+
+                    $usersGrid.append(card);
+                });
+            }
+
+            function applyFilters() {
+                const q = ($("#txtSearch").val() || "").toString().trim().toLowerCase();
+
+                let filtered = allUsers.filter(function (u) {
+                    return (u.userName || "").toLowerCase().includes(q);
+                });
+
+                if (activeFilter === "new") {
+                    filtered = filtered.filter(isNewUser);
+                } else if (activeFilter === "admin") {
+                    filtered = filtered.filter(function (u) {
+                        return (u.role || "").toLowerCase() === "admin";
+                    });
+                }
+
+                renderUsers(filtered);
+            }
+
+            function loadUsers() {
+                $loadingBox.removeClass("d-none");
+                $emptyBox.addClass("d-none");
+                $usersGrid.empty();
+
+                // AJAX isteğinde apiBaseUrl doğrudan kullanılıyor
+                const url = apiBaseUrl.endsWith("/") ? apiBaseUrl + "User/List" : apiBaseUrl + "/User/List";
+
+                $.ajax({
+                    url: url,
+                    type: "GET",
+                    success: function (res) {
+                        allUsers = Array.isArray(res) ? res : [];
+                        applyFilters();
+                    },
+                    error: function () {
+                        allUsers = [];
+                        renderUsers([]);
+                        $emptyBox.removeClass("d-none").text("Kullanıcı listesi alınamadı.");
+                    },
+                    complete: function () {
+                        $loadingBox.addClass("d-none");
+                    }
+                });
+            }
+
+            $("#txtSearch").on("input", applyFilters);
+
+            $(document).on("click", ".filter-btn", function () {
+                $(".filter-btn").removeClass("active btn-primary").addClass("btn-outline-primary");
+                $(this).removeClass("btn-outline-primary").addClass("active btn-primary");
+
+                activeFilter = $(this).data("filter");
+                applyFilters();
+            });
+
+            loadUsers();
+        });
+    </script>
+}

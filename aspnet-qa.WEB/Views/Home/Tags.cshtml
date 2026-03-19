@@ -1,0 +1,114 @@
+﻿@{
+    ViewData["Title"] = "Etiketler";
+}
+
+<div class="container py-4">
+    <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3 mb-4">
+        <div>
+            <h1 class="h3 fw-bold mb-1">Etiketler</h1>
+            <p class="text-muted mb-0">Topluluktaki etiketleri keşfet ve ada göre filtrele.</p>
+        </div>
+        <span id="tagCount" class="badge rounded-pill text-bg-primary fs-6 px-3 py-2">0 etiket</span>
+    </div>
+
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-body">
+            <div class="input-group">
+                <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
+                <input id="txtTagSearch" type="text" class="form-control" placeholder="Etiket adına göre ara..." />
+            </div>
+        </div>
+    </div>
+
+    <div id="loadingBox" class="text-center py-5">
+        <div class="spinner-border text-primary" role="status"></div>
+        <p class="text-muted mt-3 mb-0">Etiketler yükleniyor...</p>
+    </div>
+
+    <div id="emptyBox" class="alert alert-light border text-center d-none mb-4">
+        Arama kriterine uygun etiket bulunamadı.
+    </div>
+
+    <div id="tagsGrid" class="row g-4"></div>
+</div>
+
+@section Scripts {
+    <script>
+        $(function () {
+            const apiBaseUrl = "@ViewBag.ApiBaseURL";
+            const cleanApiBaseUrl = apiBaseUrl.endsWith("/") ? apiBaseUrl.slice(0, -1) : apiBaseUrl;
+
+            let allTags = [];
+
+            const $loadingBox = $("#loadingBox");
+            const $emptyBox = $("#emptyBox");
+            const $tagsGrid = $("#tagsGrid");
+            const $tagCount = $("#tagCount");
+
+            function renderTags(tags) {
+                $tagsGrid.empty();
+
+                if (!tags.length) {
+                    $emptyBox.removeClass("d-none");
+                    $tagCount.text("0 etiket");
+                    return;
+                }
+
+                $emptyBox.addClass("d-none");
+                $tagCount.text(`${tags.length} etiket`);
+
+                tags.forEach(function (tag) {
+                    const card = `
+                        <div class="col-12 col-sm-6 col-lg-3">
+                            <div class="card h-100 border-0 shadow-sm rounded-4 tag-card">
+                                <div class="card-body d-flex align-items-center justify-content-between">
+                                    <div>
+                                        <h6 class="fw-bold mb-1">#${tag.name || "-"}</h6>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>`;
+
+                    $tagsGrid.append(card);
+                });
+            }
+
+            function applySearch() {
+                const q = ($("#txtTagSearch").val() || "").toString().trim().toLowerCase();
+
+                const filtered = allTags.filter(function (t) {
+                    return (t.name || "").toLowerCase().includes(q);
+                });
+
+                renderTags(filtered);
+            }
+
+            function loadTags() {
+                $loadingBox.removeClass("d-none");
+                $emptyBox.addClass("d-none");
+                $tagsGrid.empty();
+
+                $.ajax({
+                    url: cleanApiBaseUrl + "/Tag",
+                    type: "GET",
+                    success: function (res) {
+                        allTags = Array.isArray(res) ? res : [];
+                        applySearch();
+                    },
+                    error: function () {
+                        allTags = [];
+                        renderTags([]);
+                        $emptyBox.removeClass("d-none").text("Etiketler getirilemedi. Lütfen daha sonra tekrar deneyin.");
+                    },
+                    complete: function () {
+                        $loadingBox.addClass("d-none");
+                    }
+                });
+            }
+
+            $("#txtTagSearch").on("input", applySearch);
+
+            loadTags();
+        });
+    </script>
+}

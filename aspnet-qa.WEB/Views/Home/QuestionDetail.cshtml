@@ -1,0 +1,306 @@
+@{
+    ViewData["Title"] = "Soru Detayı";
+}
+
+<div class="container py-4">
+    <div id="loadingBox" class="text-center py-5">
+        <div class="spinner-border text-primary" role="status"></div>
+        <p class="text-muted mt-3 mb-0">Soru yükleniyor...</p>
+    </div>
+
+    <div id="contentBox" class="d-none"></div>
+</div>
+
+<style>
+    .meta-box { min-width: 110px; }
+    .answer-content, .question-content { white-space: pre-wrap; }
+</style>
+
+@section Scripts {
+<script>
+    $(function () {
+        const apiBaseUrlRaw = "@ViewBag.ApiBaseURL";
+        const apiBaseUrl = apiBaseUrlRaw.endsWith("/") ? apiBaseUrlRaw.slice(0, -1) : apiBaseUrlRaw;
+        const slug = "@ViewBag.Slug";
+        const token = localStorage.getItem("token");
+        const apiOrigin = apiBaseUrl ? new URL(apiBaseUrl).origin : "";
+        const defaultPhoto = "/Files/UserPhotos/default-profile-photo.jpg";
+
+        const state = {
+            question: null,
+            answers: []
+        };
+
+        const currentUserId = getClaim("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier")
+            || getClaim("nameid")
+            || getClaim("sub")
+            || "";
+        const isAuthenticated = !!token;
+
+        function getClaim(claimType) {
+            if (!token) return null;
+            try {
+                const payload = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+                const json = decodeURIComponent(escape(window.atob(payload)));
+                const obj = JSON.parse(json);
+                return obj[claimType] || null;
+            } catch {
+                return null;
+            }
+        }
+
+        function escapeHtml(v) {
+            return (v ?? "").toString()
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#39;");
+        }
+
+        function slugify(text) {
+            return (text || "")
+                .toString()
+                .trim()
+                .toLowerCase()
+                .replace(/[^a-z0-9\u00C0-\u024f\s-]/g, "")
+                .replace(/\s+/g, "-")
+                .replace(/-+/g, "-");
+        }
+
+        function normalizePhoto(photoUrl) {
+            const val = (photoUrl || "").trim();
+            if (!val) return defaultPhoto;
+            if (val.startsWith("http://") || val.startsWith("https://")) return val;
+            if (!apiOrigin) return defaultPhoto;
+            if (val.startsWith("/Files/")) return apiOrigin + val;
+            return apiOrigin + "/Files/UserPhotos/" + val.replace(/^\/+/, "");
+        }
+
+        function toRelativeTime(dateValue) {
+            const dt = new Date(dateValue);
+            if (Number.isNaN(dt.getTime())) return "Bilinmiyor";
+
+            const sec = Math.floor((Date.now() - dt.getTime()) / 1000);
+            if (sec < 60) return "Az önce";
+            const min = Math.floor(sec / 60);
+            if (min < 60) return `${min} dakika önce`;
+            const hour = Math.floor(min / 60);
+            if (hour < 24) return `${hour} saat önce`;
+            const day = Math.floor(hour / 24);
+            if (day < 7) return `${day} gün önce`;
+            const month = Math.floor(day / 30);
+            if (month < 12) return `${month} ay önce`;
+            const year = Math.floor(day / 365);
+            return `${year} yıl önce`;
+        }
+
+        function authHeaders() {
+            return isAuthenticated ? { "Authorization": "Bearer " + token } : {};
+        }
+
+        function renderPage() {
+            const q = state.question;
+            const answers = [...(state.answers || [])].sort((a, b) => new Date(b.created) - new Date(a.created));
+
+            const questionProfileUrl = q.authorUserName ? `/Profile/${encodeURIComponent(q.authorUserName)}` : "#";
+            const questionTagsHtml = (Array.isArray(q.tags) && q.tags.length)
+                ? q.tags.map(t => {
+                    const s = (t.slug || "").trim() || slugify(t.name || "");
+                    const tagUrl = s ? `/Tags/${encodeURIComponent(s)}` : "#";
+                    return `<a href="${tagUrl}" class="badge text-bg-light border text-decoration-none me-1 mb-1">#${escapeHtml(t.name || "-")}</a>`;
+                }).join("")
+                : `<span class="text-muted small">Etiket yok</span>`;
+
+            const canManageAccept = isAuthenticated && currentUserId && q.appUserId === currentUserId;
+
+            const answersHtml = answers.length
+                ? answers.map(a => {
+                    const profileUrl = a.authorUserName ? `/Profile/${encodeURIComponent(a.authorUserName)}` : "#";
+                    const acceptedClass = a.isAccepted ? "border border-success" : "border-0";
+                    const acceptButton = canManageAccept
+                        ? `<button type="button"
+                                   class="btn btn-sm ${a.isAccepted ? "btn-outline-success" : "btn-success"} btn-toggle-accept"
+                                   data-answer-id="${a.id}">
+                                <i class="bi ${a.isAccepted ? "bi-check2-circle" : "bi-check-circle"}"></i>
+                                ${a.isAccepted ? "Onayı kaldır" : "Onayla"}
+                           </button>`
+                        : "";
+
+                    return `
+                        <div class="card shadow-sm mb-3 ${acceptedClass}">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-start gap-3 mb-2">
+                                    <div class="d-flex align-items-center gap-2">
+                                        <a href="${profileUrl}" class="text-decoration-none">
+                                            <img src="${normalizePhoto(a.authorPhotoUrl)}"
+                                                 class="rounded-circle border"
+                                                 style="width:36px;height:36px;object-fit:cover;"
+                                                 onerror="this.onerror=null;this.src='${defaultPhoto}';"
+                                                 alt="${escapeHtml(a.authorUserName || "kullanici")}" />
+                                        </a>
+                                        <div class="small">
+                                            <a href="${profileUrl}" class="fw-semibold text-decoration-none">@@${escapeHtml(a.authorUserName || "kullanici")}</a>
+                                            <div class="text-muted">${toRelativeTime(a.created)}</div>
+                                        </div>
+                                    </div>
+                                    <div class="d-flex align-items-center gap-2">
+                                        ${a.isAccepted ? '<span class="badge text-bg-success">Kabul Edildi</span>' : ""}
+                                        ${acceptButton}
+                                    </div>
+                                </div>
+                                <div class="answer-content">${escapeHtml(a.content || "")}</div>
+                            </div>
+                        </div>`;
+                }).join("")
+                : `<div class="alert alert-light border mb-0">Henüz cevap yok.</div>`;
+
+            const answerFormHtml = isAuthenticated
+                ? `
+                    <div class="card border-0 shadow-sm mb-4">
+                        <div class="card-body">
+                            <h5 class="fw-bold mb-3">Cevap Yaz</h5>
+                            <form id="answerForm">
+                                <div class="mb-3">
+                                    <textarea id="txtAnswerContent" class="form-control" rows="5" maxlength="5000" required
+                                              placeholder="Cevabınızı buraya yazın..."></textarea>
+                                </div>
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="bi bi-send"></i> Cevabı Gönder
+                                </button>
+                            </form>
+                        </div>
+                    </div>`
+                : `<div class="alert alert-warning border mb-4">
+                        Cevap yazmak için giriş yapmalısınız.
+                   </div>`;
+
+            $("#contentBox").html(`
+                <div class="card border-0 shadow-sm mb-3">
+                    <div class="card-body">
+                        <h2 class="h4 fw-bold mb-3">${escapeHtml(q.title || "-")}</h2>
+                        <p class="question-content text-muted mb-3">${escapeHtml(q.content || "")}</p>
+                        <div class="mb-3">${questionTagsHtml}</div>
+
+                        <div class="d-flex align-items-center gap-2">
+                            <a href="${questionProfileUrl}" class="text-decoration-none">
+                                <img src="${normalizePhoto(q.authorPhotoUrl)}"
+                                     class="rounded-circle border"
+                                     style="width:38px;height:38px;object-fit:cover;"
+                                     onerror="this.onerror=null;this.src='${defaultPhoto}';"
+                                     alt="${escapeHtml(q.authorUserName || "kullanici")}" />
+                            </a>
+                            <div class="small">
+                                <a href="${questionProfileUrl}" class="fw-semibold text-decoration-none">@@${escapeHtml(q.authorUserName || "kullanici")}</a>
+                                <div class="text-muted">${toRelativeTime(q.created)}</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card border-0 shadow-sm mb-4">
+                    <div class="card-body">
+                        <div class="d-flex flex-wrap gap-2 align-items-start">
+                            <div class="meta-box border rounded-3 p-2 text-center">
+                                <div id="questionViewCount" class="fw-bold">${q.viewCount ?? 0}</div>
+                                <small class="text-muted">Görüntülenme</small>
+                            </div>
+                            <div class="meta-box border rounded-3 p-2 text-center">
+                                <div id="questionAnswerCount" class="fw-bold">${q.answerCount ?? 0}</div>
+                                <small class="text-muted">Toplam Cevap</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                ${answerFormHtml}
+
+                <h5 class="fw-bold mb-3">Cevaplar</h5>
+                <div id="answersBox">${answersHtml}</div>
+            `).removeClass("d-none");
+        }
+
+        function loadQuestion() {
+            $("#loadingBox").removeClass("d-none");
+            $("#contentBox").addClass("d-none").empty();
+
+            $.ajax({
+                url: `${apiBaseUrl}/Question/slug/${encodeURIComponent(slug)}`,
+                type: "GET",
+                success: function (res) {
+                    state.question = res?.question || null;
+                    state.answers = Array.isArray(res?.answers) ? res.answers : [];
+
+                    if (!state.question) {
+                        $("#contentBox").html(`<div class="alert alert-danger">Soru bulunamadı.</div>`).removeClass("d-none");
+                        return;
+                    }
+
+                    renderPage();
+                },
+                error: function () {
+                    $("#contentBox").html(`<div class="alert alert-danger">Soru bulunamadı.</div>`).removeClass("d-none");
+                },
+                complete: function () {
+                    $("#loadingBox").addClass("d-none");
+                }
+            });
+        }
+
+        $(document).on("submit", "#answerForm", function (e) {
+            e.preventDefault();
+
+            if (!isAuthenticated || !state.question) return;
+
+            const content = ($("#txtAnswerContent").val() || "").toString().trim();
+            if (!content) return;
+
+            $.ajax({
+                url: `${apiBaseUrl}/Question/${state.question.id}/answers`,
+                type: "POST",
+                headers: authHeaders(),
+                data: JSON.stringify({ content }),
+                contentType: "application/json",
+                success: function (res) {
+                    const newAnswer = res?.answer;
+                    if (newAnswer) {
+                        state.answers.unshift(newAnswer);
+                        state.question.answerCount = (Number(state.question.answerCount) || 0) + 1;
+                        renderPage();
+                    }
+                }
+            });
+        });
+
+        $(document).on("click", ".btn-toggle-accept", function () {
+            if (!isAuthenticated) return;
+
+            const answerId = Number($(this).data("answer-id")) || 0;
+            if (!answerId) return;
+
+            $.ajax({
+                url: `${apiBaseUrl}/Answer/${answerId}/toggle-accept`,
+                type: "POST",
+                headers: authHeaders(),
+                success: function (res) {
+                    const accepted = !!res?.isAccepted;
+                    state.answers.forEach(a => {
+                        if (a.questionId === state.question.id) {
+                            a.isAccepted = false;
+                        }
+                    });
+
+                    const idx = state.answers.findIndex(x => x.id === answerId);
+                    if (idx >= 0) {
+                        state.answers[idx].isAccepted = accepted;
+                    }
+
+                    renderPage();
+                }
+            });
+        });
+
+        loadQuestion();
+    });
+</script>
+}

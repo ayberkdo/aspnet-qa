@@ -1,34 +1,51 @@
 ﻿using aspnet_qa.API.DTOs;
 using aspnet_qa.API.Repositories;
-using AutoMapper;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace aspnet_qa.API.Controllers
 {
-    [Route("api/[controller]")]
     [ApiController]
-    [Authorize]
+    [Route("api/[controller]")]
     public class TagController : ControllerBase
     {
-        private readonly IConfiguration _configuration;
-        private readonly IMapper _mapper;
         private readonly TagRepository _tagRepository;
 
-        public TagController(IConfiguration configuration, IMapper mapper, TagRepository tagRepository)
+        public TagController(TagRepository tagRepository)
         {
-            _configuration = configuration;
-            _mapper = mapper;
             _tagRepository = tagRepository;
         }
 
         [HttpGet]
         [AllowAnonymous]
-        public async Task<List<TagDto>> List()
+        public async Task<ActionResult<List<TagDto>>> List()
         {
-            var tags = await _tagRepository.GetAllAsync();
-            return _mapper.Map<List<TagDto>>(tags);
+            var tags = await _tagRepository
+                .Where(x => x.IsActive)
+                .OrderBy(x => x.Name)
+                .Select(x => new TagDto
+                {
+                    Id = x.Id,
+                    IsActive = x.IsActive,
+                    Created = x.Created,
+                    Updated = x.Updated,
+                    Name = x.Name,
+                    Slug = x.Slug
+                })
+                .ToListAsync();
+
+            return Ok(tags);
+        }
+
+        [HttpGet("slug/{slug}")]
+        [AllowAnonymous]
+        public async Task<IActionResult> GetBySlug(string slug)
+        {
+            TagQuestionsDto? result = await _tagRepository.GetTagWithQuestionsBySlugAsync(slug);
+            if (result == null) return NotFound();
+
+            return Ok(result);
         }
     }
 }

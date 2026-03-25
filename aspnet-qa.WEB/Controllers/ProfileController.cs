@@ -14,12 +14,46 @@ namespace aspnet_qa.WEB.Controllers
         }
 
         [Route("Profile")]
+        [Route("Profile/Index")]
         [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
         public IActionResult Index()
         {
-            var ApiBaseURL = _configuration["ApiBaseURL"];
-            ViewBag.ApiBaseURL = ApiBaseURL;
+            ViewBag.ApiBaseURL = _configuration["ApiBaseURL"];
             return View();
+        }
+
+        [Route("Profile/MyAnswers")]
+        [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+        public IActionResult MyAnswers()
+        {
+            ViewBag.ApiBaseURL = _configuration["ApiBaseURL"];
+            return View();
+        }
+
+        [Route("Profile/{username}")]
+        [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+        public IActionResult UserProfile(string username)
+        {
+            ViewBag.ApiBaseURL = _configuration["ApiBaseURL"];
+            ViewData["ProfileUserName"] = username;
+            ViewData["Title"] = $"@{username} - Sorular";
+            ViewData["ProfilePageTitle"] = $"@{username} - Sorular";
+            ViewData["ProfilePageDescription"] = "Kullanıcının paylaştığı sorular.";
+            ViewData["ProfileActiveTab"] = "questions";
+            return View("Index");
+        }
+
+        [Route("Profile/{username}/Answers")]
+        [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+        public IActionResult UserProfileAnswers(string username)
+        {
+            ViewBag.ApiBaseURL = _configuration["ApiBaseURL"];
+            ViewData["ProfileUserName"] = username;
+            ViewData["Title"] = $"@{username} - Cevaplar";
+            ViewData["ProfilePageTitle"] = $"@{username} - Cevaplar";
+            ViewData["ProfilePageDescription"] = "Kullanıcının paylaştığı cevaplar.";
+            ViewData["ProfileActiveTab"] = "answers";
+            return View("MyAnswers");
         }
     }
 }

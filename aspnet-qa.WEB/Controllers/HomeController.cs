@@ -64,5 +64,21 @@ namespace aspnet_qa.WEB.Controllers
             ViewBag.ApiBaseURL = ApiBaseURL;
             return View();
         }
+
+        [Route("Questions/{slug}")]
+        public IActionResult QuestionDetail(string slug)
+        {
+            ViewBag.ApiBaseURL = _configuration["ApiBaseURL"];
+            ViewBag.Slug = slug;
+            return View();
+        }
+
+        [Route("Tags/{slug}")]
+        public IActionResult TagDetail(string slug)
+        {
+            ViewBag.ApiBaseURL = _configuration["ApiBaseURL"];
+            ViewBag.Slug = slug;
+            return View();
+        }
     }
 }

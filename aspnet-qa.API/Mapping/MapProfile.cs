@@ -12,7 +12,11 @@ namespace aspnet_qa.API.Mapping
             CreateMap<Tag, TagDto>().ReverseMap();
 
             CreateMap<Answer, AnswerDto>()
-                .ForMember(dest => dest.AuthorName, opt => opt.MapFrom(src => src.AppUser.FullName))
+                .ForMember(dest => dest.AuthorName, opt => opt.MapFrom(src => src.AppUser != null ? src.AppUser.FullName : "Kullanıcı"))
+                .ForMember(dest => dest.AuthorUserName, opt => opt.MapFrom(src => src.AppUser != null ? src.AppUser.UserName : "kullanici"))
+                .ForMember(dest => dest.AuthorPhotoUrl, opt => opt.MapFrom(src => src.AppUser != null ? src.AppUser.PhotoUrl : "default-profile-photo.jpg"))
+                .ForMember(dest => dest.QuestionTitle, opt => opt.MapFrom(src => src.Question != null ? src.Question.Title : string.Empty))
+                .ForMember(dest => dest.QuestionSlug, opt => opt.MapFrom(src => src.Question != null ? src.Question.Slug : string.Empty))
                 .ReverseMap();
 
             CreateMap<Question, QuestionDto>()
@@ -25,8 +29,6 @@ namespace aspnet_qa.API.Mapping
                         ? src.QuestionTags.Select(qt => qt.Tag)
                         : Enumerable.Empty<Tag>()))
                 .ReverseMap();
-
-            CreateMap<Vote, VoteDto>().ReverseMap();
         }
     }
 }

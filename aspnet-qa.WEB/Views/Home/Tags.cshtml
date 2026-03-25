@@ -63,7 +63,9 @@
                             <div class="card h-100 border-0 shadow-sm rounded-4 tag-card">
                                 <div class="card-body d-flex align-items-center justify-content-between">
                                     <div>
-                                        <h6 class="fw-bold mb-1">#${tag.name || "-"}</h6>
+                                        <a href="/Tags/${encodeURIComponent(tag.slug)}" class="text-decoration-none text-dark">
+                                            <h6 class="fw-bold mb-1">#${tag.name || "-"}</h6>
+                                        </a>
                                     </div>
                                 </div>
                             </div>
@@ -92,7 +94,7 @@
                     url: cleanApiBaseUrl + "/Tag",
                     type: "GET",
                     success: function (res) {
-                        allTags = Array.isArray(res) ? res : [];
+                        allTags = (Array.isArray(res) ? res : []).map(normalizeTag);
                         applySearch();
                     },
                     error: function () {
@@ -104,6 +106,23 @@
                         $loadingBox.addClass("d-none");
                     }
                 });
+            }
+
+            function slugify(text) {
+                return (text || "")
+                    .toString()
+                    .trim()
+                    .toLowerCase()
+                    .replace(/[^a-z0-9\u00C0-\u024f\s-]/g, "")
+                    .replace(/\s+/g, "-")
+                    .replace(/-+/g, "-");
+            }
+
+            function normalizeTag(tag) {
+                return {
+                    name: tag?.name || "-",
+                    slug: (tag?.slug || "").toString().trim() || slugify(tag?.name || "")
+                };
             }
 
             $("#txtTagSearch").on("input", applySearch);

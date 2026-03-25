@@ -1,0 +1,224 @@
+@{
+    Layout = "_Layout";
+    var pageTitle = ViewData["ProfilePageTitle"]?.ToString() ?? "Profil";
+    var pageDescription = ViewData["ProfilePageDescription"]?.ToString() ?? "";
+    var activeTab = ViewData["ProfileActiveTab"]?.ToString() ?? "questions";
+    var profileUserName = (ViewData["ProfileUserName"]?.ToString() ?? string.Empty).Trim();
+    var isPublicProfile = !string.IsNullOrWhiteSpace(profileUserName);
+}
+
+<div class="container py-4">
+    <div class="row g-4">
+        <div class="col-12 col-xl-4">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body p-4">
+                    <div id="profileLoading" class="text-center py-5">
+                        <div class="spinner-border text-primary" role="status"></div>
+                        <p class="text-muted mt-3 mb-0">Profil yükleniyor...</p>
+                    </div>
+
+                    <div id="profileSummary" class="d-none">
+                        <div class="text-center mb-4">
+                            <img id="profile-image"
+                                 src="/Files/UserPhotos/default-profile-photo.jpg"
+                                 class="rounded-circle border shadow-sm"
+                                 style="width:120px;height:120px;object-fit:cover;"
+                                 alt="Profil Fotoğrafı" />
+                            <h5 class="fw-bold mt-3 mb-1" id="profile-fullname">-</h5>
+                            <p class="text-muted mb-2" id="profile-username">@@-</p>
+                            <span class="badge" id="profile-role-badge">User</span>
+                        </div>
+
+                        <div class="border rounded-3 p-3 mb-3 bg-light-subtle">
+                            <div class="small text-muted mb-1">E-posta</div>
+                            <div class="fw-semibold text-break" id="profile-email">-</div>
+                        </div>
+
+                        <div class="d-grid gap-2">
+                            <div id="ownerActions" class="d-grid gap-2 @(isPublicProfile ? "d-none" : "")">
+                                <a href="/Profile/Index" class="btn @(activeTab == "questions" ? "btn-primary" : "btn-outline-primary")">
+                                    <i class="bi bi-patch-question me-1"></i>Sorularım
+                                </a>
+                                <a href="/Profile/MyAnswers" class="btn @(activeTab == "answers" ? "btn-primary" : "btn-outline-primary")">
+                                    <i class="bi bi-chat-left-text me-1"></i>Cevaplarım
+                                </a>
+                                <button id="btnLogout" type="button" class="btn btn-outline-danger">
+                                    <i class="bi bi-box-arrow-right me-1"></i>Güvenli Çıkış
+                                </button>
+                            </div>
+
+                            <div id="publicActions" class="d-grid gap-2 @(!isPublicProfile ? "d-none" : "")">
+                                <a href="/Profile/@Uri.EscapeDataString(profileUserName)" class="btn @(activeTab == "questions" ? "btn-primary" : "btn-outline-primary")">
+                                    <i class="bi bi-patch-question me-1"></i>Soruları
+                                </a>
+                                <a href="/Profile/@Uri.EscapeDataString(profileUserName)/Answers" class="btn @(activeTab == "answers" ? "btn-primary" : "btn-outline-primary")">
+                                    <i class="bi bi-chat-left-text me-1"></i>Cevapları
+                                </a>
+                            </div>  
+                        </div>
+                    </div>
+
+                    <div id="profileError" class="alert alert-danger d-none mb-0">
+                        Profil verisi alınamadı.
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12 col-xl-8">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body p-4">
+                    <div class="mb-4">
+                        <h1 class="h4 fw-bold mb-1">@pageTitle</h1>
+                        @if (!string.IsNullOrWhiteSpace(pageDescription))
+                        {
+                            <p class="text-muted mb-0">@pageDescription</p>
+                        }
+                    </div>
+
+                    @RenderBody()
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        (function () {
+            const token = localStorage.getItem("token");
+            const apiBaseRaw = "@(ViewBag.ApiBaseURL ?? string.Empty)";
+            const apiBaseUrl = apiBaseRaw.endsWith("/") ? apiBaseRaw.slice(0, -1) : apiBaseRaw;
+            const requestedUserName = "@profileUserName";
+            const hasRouteUser = @isPublicProfile.ToString().ToLowerInvariant();
+
+            const $profileLoading = $("#profileLoading");
+            const $profileSummary = $("#profileSummary");
+            const $profileError = $("#profileError");
+            const $ownerActions = $("#ownerActions");
+            const $publicActions = $("#publicActions");
+
+            function getCurrentUserNameFromToken() {
+                if (!token) return null;
+                try {
+                    const payload = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+                    const json = decodeURIComponent(escape(window.atob(payload)));
+                    const obj = JSON.parse(json);
+
+                    return obj["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name"]
+                        || obj.unique_name
+                        || obj.name
+                        || null;
+                } catch {
+                    return null;
+                }
+            }
+
+            function apiOrigin() {
+                try { return new URL(apiBaseUrl).origin; } catch { return ""; }
+            }
+
+            function normalizePhoto(photoUrl) {
+                const defaultPhoto = "/Files/UserPhotos/default-profile-photo.jpg";
+                const val = (photoUrl || "").trim();
+                const origin = apiOrigin();
+
+                if (!val) return defaultPhoto;
+                if (val.startsWith("http://") || val.startsWith("https://")) return val;
+                if (!origin) return defaultPhoto;
+                if (val.startsWith("/Files/")) return origin + val;
+
+                return origin + "/Files/UserPhotos/" + val.replace(/^\/+/, "");
+            }
+
+            function clearClientSession() {
+                localStorage.removeItem("token");
+                localStorage.clear();
+                sessionStorage.clear();
+            }
+
+            function logoutAndRedirect() {
+                clearClientSession();
+                window.location.href = "/Login";
+            }
+
+            if (!apiBaseUrl) {
+                $profileLoading.addClass("d-none");
+                $profileError.removeClass("d-none").text("API bağlantı bilgisi eksik.");
+                return;
+            }
+
+            const tokenUserName = (getCurrentUserNameFromToken() || "").toLowerCase();
+            const routeUserName = (requestedUserName || "").trim().toLowerCase();
+            const isOwnProfileRoute = hasRouteUser && tokenUserName && routeUserName && tokenUserName === routeUserName;
+            const useOwnerMode = !hasRouteUser || isOwnProfileRoute;
+
+            $ownerActions.toggleClass("d-none", !useOwnerMode);
+            $publicActions.toggleClass("d-none", useOwnerMode);
+
+            if (useOwnerMode && !token) {
+                window.location.href = "/Login";
+                return;
+            }
+
+            if (useOwnerMode) {
+                $("#btnLogout").on("click", function () {
+                    $.ajax({
+                        url: apiBaseUrl + "/User/Logout",
+                        type: "POST",
+                        headers: { "Authorization": "Bearer " + token },
+                        complete: logoutAndRedirect
+                    });
+                });
+            }
+
+            const profileUrl = useOwnerMode
+                ? apiBaseUrl + "/User/GetProfile"
+                : apiBaseUrl + "/User/GetByUserName/" + encodeURIComponent(requestedUserName);
+
+            $.ajax({
+                url: profileUrl,
+                type: "GET",
+                headers: useOwnerMode ? { "Authorization": "Bearer " + token } : {},
+                success: function (profile) {
+                    $("#profile-fullname").text(profile.fullName || "-");
+                    $("#profile-username").text("@@" + (profile.username || "-"));
+                    $("#profile-email").text(profile.email || "-");
+                    $("#profile-image").attr("src", normalizePhoto(profile.profileImageUrl));
+
+                    const role = profile.role || "User";
+                    const isAdmin = role.toLowerCase() === "admin";
+                    $("#profile-role-badge")
+                        .text(role)
+                        .removeClass("bg-danger bg-primary")
+                        .addClass(isAdmin ? "bg-danger" : "bg-primary");
+
+                    $profileLoading.addClass("d-none");
+                    $profileSummary.removeClass("d-none");
+
+                    const context = {
+                        token: token,
+                        apiBaseUrl: apiBaseUrl,
+                        apiOrigin: apiOrigin(),
+                        profile: profile,
+                        isPublicProfile: !useOwnerMode,
+                        profileUserName: profile.username || requestedUserName
+                    };
+
+                    if (typeof window.loadProfilePageData === "function") {
+                        window.loadProfilePageData(context);
+                    }
+                },
+                error: function () {
+                    $profileLoading.addClass("d-none");
+                    $profileError.removeClass("d-none");
+                    if (useOwnerMode) {
+                        logoutAndRedirect();
+                    }
+                }
+            });
+        })();
+    </script>
+
+    @await RenderSectionAsync("ProfilePageScripts", required: false)
+}

@@ -1,0 +1,79 @@
+﻿@{
+    Layout = "~/Views/Shared/_ProfileLayout.cshtml";
+    ViewData["Title"] = ViewData["Title"] ?? "Profilim - Cevaplarım";
+    ViewData["ProfilePageTitle"] = ViewData["ProfilePageTitle"] ?? "Hesap Cevaplarım";
+    ViewData["ProfilePageDescription"] = ViewData["ProfilePageDescription"] ?? "Oturum açan hesabın verdiği cevaplar listelenir.";
+    ViewData["ProfileActiveTab"] = ViewData["ProfileActiveTab"] ?? "answers";
+}
+
+<div id="answersLoading" class="text-center py-5">
+    <div class="spinner-border text-primary" role="status"></div>
+    <p class="text-muted mt-3 mb-0">Cevaplar yükleniyor...</p>
+</div>
+
+<div id="answersEmpty" class="alert alert-light border d-none mb-0">
+    Henüz cevap eklenmemiş.
+</div>
+
+<div id="answersList" class="d-grid gap-3"></div>
+
+@section ProfilePageScripts {
+    <script>
+        window.loadProfilePageData = function (ctx) {
+            const $loading = $("#answersLoading");
+            const $empty = $("#answersEmpty");
+            const $list = $("#answersList");
+
+            function card(a) {
+                const created = a.created ? new Date(a.created).toLocaleString("tr-TR") : "-";
+                const acceptedBadge = a.isAccepted
+                    ? `<span class="badge text-bg-success">Kabul Edildi</span>`
+                    : `<span class="badge text-bg-secondary">Beklemede</span>`;
+
+                return `
+                    <div class="card border-0 shadow-sm">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+                                <h6 class="fw-bold mb-0">${a.questionTitle || "Soru başlığı yok"}</h6>
+                                ${acceptedBadge}
+                            </div>
+
+                            <p class="text-muted mb-3">${a.content || ""}</p>
+
+                            <div class="d-flex flex-wrap gap-2">
+                                <span class="badge text-bg-primary">Skor: ${a.score ?? 0}</span>
+                                <span class="badge text-bg-light border text-dark">SoruId: ${a.questionId ?? "-"}</span>
+                                <span class="badge text-bg-light border text-dark">${created}</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            $.ajax({
+                url: ctx.isPublicProfile
+                    ? (ctx.apiBaseUrl + "/Answer/user/" + encodeURIComponent(ctx.profileUserName || ""))
+                    : (ctx.apiBaseUrl + "/Answer/my"),
+                type: "GET",
+                headers: (!ctx.isPublicProfile && ctx.token) ? { "Authorization": "Bearer " + ctx.token } : {},
+                success: function (res) {
+                    const list = Array.isArray(res) ? res : [];
+                    $list.empty();
+
+                    if (!list.length) {
+                        $empty.removeClass("d-none").text(ctx.isPublicProfile ? "Bu kullanıcının henüz cevabı yok." : "Henüz cevap eklenmemiş.");
+                        return;
+                    }
+
+                    list.forEach(item => $list.append(card(item)));
+                },
+                error: function () {
+                    $empty.removeClass("d-none").text("Cevaplar alınamadı. Lütfen tekrar deneyin.");
+                },
+                complete: function () {
+                    $loading.addClass("d-none");
+                }
+            });
+        };
+    </script>
+}

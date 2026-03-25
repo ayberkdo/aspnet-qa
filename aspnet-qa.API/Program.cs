@@ -46,7 +46,6 @@ builder.Services.AddScoped<UserRepository>();
 builder.Services.AddScoped<QuestionRepository>();
 builder.Services.AddScoped<AnswerRepository>();
 builder.Services.AddScoped<TagRepository>();
-builder.Services.AddScoped<VoteRepository>();
 
 // --- 4. AutoMapper ---
 builder.Services.AddAutoMapper(cfg => { }, typeof(MapProfile));

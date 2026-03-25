@@ -3,9 +3,9 @@
     public class QuestionDto : BaseDto
     {
         public string Title { get; set; }
+        public string Slug { get; set; } // yeni
         public string Content { get; set; }
         public int ViewCount { get; set; }
-        public int Score { get; set; }
 
         public string AppUserId { get; set; }
         public string AuthorName { get; set; }

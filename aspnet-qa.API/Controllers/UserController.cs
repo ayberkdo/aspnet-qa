@@ -222,25 +222,31 @@ namespace aspnet_qa.API.Controllers
         }
 
         [HttpGet]
-        public IActionResult GetProfile()
+        public async Task<IActionResult> GetProfile()
         {
-            // JWT Token içinden kullanıcının kimlik bilgilerini (Claim'leri) okuyoruz
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            var username = User.FindFirstValue(ClaimTypes.Name);
-            var role = User.FindFirstValue(ClaimTypes.Role) ?? "User"; // Rol yoksa varsayılan 'User'
-            var email = User.FindFirstValue(ClaimTypes.Email);
+            if (string.IsNullOrWhiteSpace(userId))
+            {
+                return Unauthorized(new { message = "Geçersiz oturum." });
+            }
 
-            var fullname = User.FindFirstValue("FullName") ?? "Ad Soyad";
-            var userPhoto = User.FindFirstValue("UserPhoto") ?? "/Files/UserPhotos/default-profile-photo.jpg";
+            var user = await _userManager.FindByIdAsync(userId);
+            if (user == null)
+            {
+                return NotFound(new { message = "Kullanıcı bulunamadı." });
+            }
+
+            var roles = await _userManager.GetRolesAsync(user);
+            var role = roles.FirstOrDefault() ?? "User";
 
             var userProfile = new
             {
-                Id = userId,
-                Username = username,
-                FullName = fullname,
-                Email = email,
+                Id = user.Id,
+                Username = user.UserName,
+                FullName = user.FullName,
+                Email = user.Email,
                 Role = role,
-                ProfileImageUrl = userPhoto,
+                ProfileImageUrl = user.PhotoUrl
             };
 
             return Ok(userProfile);
@@ -253,6 +259,36 @@ namespace aspnet_qa.API.Controllers
             // 2026 Senior Notu: İleride buraya 'Token'ı kara listeye al' 
             // veya 'Kullanıcının Refresh Token'ını sil' gibi mantıklar gelecek.
             return Ok(new { status = true, message = "Başarıyla çıkış yapıldı." });
+        }
+
+        [HttpGet("{username}")]
+        [AllowAnonymous]
+        public async Task<IActionResult> GetByUserName(string username)
+        {
+            if (string.IsNullOrWhiteSpace(username))
+            {
+                return BadRequest(new { message = "Kullanıcı adı zorunludur." });
+            }
+
+            var user = await _userManager.FindByNameAsync(username);
+            if (user == null)
+            {
+                return NotFound(new { message = "Kullanıcı bulunamadı." });
+            }
+
+            var roles = await _userManager.GetRolesAsync(user);
+            var role = roles.FirstOrDefault() ?? "User";
+
+            return Ok(new
+            {
+                Id = user.Id,
+                Username = user.UserName,
+                FullName = user.FullName,
+                Email = user.Email,
+                Role = role,
+                ProfileImageUrl = user.PhotoUrl,
+                CreatedAt = user.CreatedAt
+            });
         }
     }
 }

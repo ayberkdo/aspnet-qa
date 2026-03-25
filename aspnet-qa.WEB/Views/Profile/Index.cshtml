@@ -1,121 +1,96 @@
 ﻿@{
-    ViewData["Title"] = "Profilim";
-    var apiBaseUrl = ViewBag.ApiBaseURL;
-    Layout = null;
+    Layout = "~/Views/Shared/_ProfileLayout.cshtml";
+    ViewData["Title"] = ViewData["Title"] ?? "Profilim - Sorularım";
+    ViewData["ProfilePageTitle"] = ViewData["ProfilePageTitle"] ?? "Hesap Sorularım";
+    ViewData["ProfilePageDescription"] = ViewData["ProfilePageDescription"] ?? "Oturum açan hesaba ait sorular listelenir.";
+    ViewData["ProfileActiveTab"] = ViewData["ProfileActiveTab"] ?? "questions";
 }
 
-<div class="container mt-5">
-    <div class="row justify-content-center">
-        <div class="col-md-6">
-            <div class="card shadow-lg border-0 rounded-4">
-
-                <div id="loading-spinner" class="text-center p-5">
-                    <div class="spinner-border text-primary" role="status">
-                        <span class="visually-hidden">Yükleniyor...</span>
-                    </div>
-                </div>
-
-                <div class="card-body text-center p-5" id="profile-card" style="display: none;">
-
-                    <div class="mb-4">
-                        <img id="profile-image" src="" class="rounded-circle img-thumbnail shadow-sm" style="width: 150px; height: 150px; object-fit: cover;" alt="Profil Fotoğrafı">
-                    </div>
-
-                    <h2 class="fw-bold mb-1" id="profile-fullname"></h2>
-                    <div class="mb-3">
-                        <span class="text-muted" id="profile-username"></span>
-                        <span id="profile-role" class="badge ms-2"></span>
-                    </div>
-
-                    <p class="text-secondary mb-4" id="profile-email"></p>
-
-                    <hr class="my-4">
-
-                    <div class="d-grid gap-2" id="action-buttons"></div>
-
-                    <button id="btnLogout" class="btn btn-link text-danger text-decoration-none mt-2">
-                        <i class="bi bi-box-arrow-right me-1"></i>Güvenli Çıkış Yap
-                    </button>
-
-                </div>
-            </div>
-        </div>
-    </div>
+<div id="questionsLoading" class="text-center py-5">
+    <div class="spinner-border text-primary" role="status"></div>
+    <p class="text-muted mt-3 mb-0">Sorular yükleniyor...</p>
 </div>
 
-<script src="~/lib/jquery/dist/jquery.js"></script>
+<div id="questionsEmpty" class="alert alert-light border d-none mb-0">
+    Henüz soru eklenmemiş.
+</div>
 
-<script>
-    $(document).ready(function () {
-        console.log("Script çalışmaya başladı..."); // Kontrol için
-        var apiBaseUrl = "@apiBaseUrl";
-        var token = localStorage.getItem("token");
+<div id="questionsList" class="d-grid gap-3"></div>
 
-        if (!token) {
-            window.location.href = "/Login";
-            return;
+@section ProfilePageScripts {
+    <script>
+        function slugify(text) {
+            return (text || "")
+                .toString()
+                .trim()
+                .toLowerCase()
+                .replace(/[^a-z0-9\u00C0-\u024f\s-]/g, "")
+                .replace(/\s+/g, "-")
+                .replace(/-+/g, "-");
         }
 
-        // URL'i temizleyelim (Fazla slash hatasını önlemek için)
-        var cleanUrl = apiBaseUrl.endsWith('/') ? apiBaseUrl.slice(0, -1) : apiBaseUrl;
+        window.loadProfilePageData = function (ctx) {
+            const $loading = $("#questionsLoading");
+            const $empty = $("#questionsEmpty");
+            const $list = $("#questionsList");
 
-        $.ajax({
-            url: cleanUrl + "/User/GetProfile",
-            type: "GET",
-            headers: { "Authorization": "Bearer " + token },
-            success: function (d) {
-                console.log("Veri geldi:", d);
-                $("#profile-fullname").text(d.fullName);
-                $("#profile-username").text("@@" + d.username);
-                $("#profile-email").text(d.email);
-                $("#profile-image").attr("src", d.profileImageUrl);
+            function card(q) {
+                const created = q.created ? new Date(q.created).toLocaleString("tr-TR") : "-";
+                const questionSlug = (q.slug || "").toString().trim();
+                const questionUrl = questionSlug ? `/Questions/${encodeURIComponent(questionSlug)}` : "#";
 
-                if (d.role === "Admin") {
-                    $("#profile-role").text(d.role).addClass("bg-danger");
-                    $("#action-buttons").html('<a href="/Tags/Index" class="btn btn-dark btn-lg rounded-pill">Sistemi Yönet</a>');
-                } else {
-                    $("#profile-role").text(d.role).addClass("bg-primary");
-                    $("#action-buttons").html('<a href="/Questions/MyQuestions" class="btn btn-outline-primary btn-lg rounded-pill">Sorularım</a>');
-                }
+                const tags = Array.isArray(q.tags) && q.tags.length
+                    ? q.tags.map(t => {
+                        const tagSlug = (t?.slug || "").toString().trim();
+                        const tagUrl = tagSlug ? `/Tags/${encodeURIComponent(tagSlug)}` : "#";
+                        return `<a href="${tagUrl}" class="badge text-bg-light border me-1 mb-1 text-decoration-none text-dark">#${t?.name || "-"}</a>`;
+                    }).join("")
+                    : `<span class="text-muted small">Etiket yok</span>`;
 
-                $("#loading-spinner").hide();
-                $("#profile-card").fadeIn(500);
-            },
-            error: function (xhr) {
-                console.error("AJAX Hatası:", xhr);
-                alert("Veri çekilemedi!");
-                $("#loading-spinner").hide();
+                return `
+                    <div class="card border-0 shadow-sm">
+                        <div class="card-body">
+                            <div class="d-flex flex-wrap gap-2 mb-2">
+                                <span class="badge text-bg-secondary">Cevap: ${q.answerCount ?? 0}</span>
+                                <span class="badge text-bg-light border text-dark">Görüntülenme: ${q.viewCount ?? 0}</span>
+                            </div>
+                                
+                            <h5 class="fw-bold mb-2">
+                                <a href="${questionUrl}" class="text-decoration-none">${q.title || "-"}</a>
+                            </h5>
+                            <p class="text-muted mb-3">${q.content || ""}</p>
+
+                            <div class="mb-2">${tags}</div>
+                            <small class="text-muted">Oluşturulma: ${created}</small>
+                        </div>
+                    </div>
+                `;
             }
-        });
-
-        $("#btnLogout").click(function () {
-            var token = localStorage.getItem("token");
-            var apiBaseUrl = "@ViewBag.ApiBaseURL";
 
             $.ajax({
-                url: apiBaseUrl + "/User/Logout",
-                type: "POST",
-                headers: {
-                    "Authorization": "Bearer " + token
-                },
-                success: function (d) {
-                    // 1. API tarafı okey dedi
-                    console.log(d.message);
+                url: ctx.isPublicProfile
+                    ? (ctx.apiBaseUrl + "/Question/user/" + encodeURIComponent(ctx.profileUserName || ""))
+                    : (ctx.apiBaseUrl + "/Question/my"),
+                type: "GET",
+                headers: (!ctx.isPublicProfile && ctx.token) ? { "Authorization": "Bearer " + ctx.token } : {},
+                success: function (res) {
+                    const list = Array.isArray(res) ? res : [];
+                    $list.empty();
 
-                    // 2. İstemci tarafındaki izleri SİL (En kritik adım)
-                    localStorage.removeItem("token");
-                    localStorage.clear();
-                    sessionStorage.clear();
+                    if (!list.length) {
+                        $empty.removeClass("d-none").text(ctx.isPublicProfile ? "Bu kullanıcının henüz sorusu yok." : "Henüz soru eklenmemiş.");
+                        return;
+                    }
 
-                    // 3. Yönlendir
-                    window.location.href = "/Login";
+                    list.forEach(item => $list.append(card(item)));
                 },
                 error: function () {
-                    // API hata verse bile biz local'i silip kullanıcıyı dışarı atmalıyız
-                    localStorage.removeItem("token");
-                    window.location.href = "/Login";
+                    $empty.removeClass("d-none").text("Sorular alınamadı. Lütfen tekrar deneyin.");
+                },
+                complete: function () {
+                    $loading.addClass("d-none");
                 }
             });
-        });
-    });
-</script>
+        };
+    </script>
+}

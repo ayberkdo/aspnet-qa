@@ -1,6 +1,5 @@
 ﻿@{
     ViewData["Title"] = "Sorular";
-    var apiBaseUrl = ViewBag.ApiBaseURL as string ?? "";
 }
 
 <div class="container py-4">
@@ -26,7 +25,6 @@
                         <button type="button" class="btn btn-primary filter-btn active" data-filter="newest">En yeni</button>
                         <button type="button" class="btn btn-outline-primary filter-btn" data-filter="unanswered">Cevaplanmamış</button>
                         <button type="button" class="btn btn-outline-primary filter-btn" data-filter="myunanswered">Cevaplanmamış (Benim)</button>
-                        <button type="button" class="btn btn-outline-primary filter-btn" data-filter="topscore">Skoru yüksek</button>
                         <button type="button" class="btn btn-outline-primary filter-btn" data-filter="popular">Popüler</button>
                     </div>
                 </div>
@@ -63,7 +61,7 @@
 @section Scripts {
     <script>
         $(function () {
-            const apiBaseUrl = "@apiBaseUrl";
+            const apiBaseUrl = "@ViewBag.ApiBaseURL";
             const cleanApiBaseUrl = apiBaseUrl.endsWith("/") ? apiBaseUrl.slice(0, -1) : apiBaseUrl;
             const apiOrigin = cleanApiBaseUrl ? new URL(cleanApiBaseUrl).origin : "";
             const defaultPhoto = "/Files/UserPhotos/default-profile-photo.jpg";
@@ -128,25 +126,29 @@
             }
 
             function normalizeQuestion(q) {
+                const tags = Array.isArray(q.tags) ? q.tags : [];
+
                 return {
                     id: q.id,
+                    slug: (q.slug || "").toString().trim(),
                     title: q.title || "-",
                     content: q.content || "",
                     viewCount: Number(q.viewCount) || 0,
-                    score: Number(q.score) || 0,
                     answerCount: Number(q.answerCount) || 0,
                     appUserId: q.appUserId || "",
                     authorName: q.authorName || "Kullanıcı",
                     authorUserName: q.authorUserName || q.authorName || "kullanici",
                     authorPhotoUrl: normalizePhoto(q.authorPhotoUrl),
                     created: q.created,
-                    tags: Array.isArray(q.tags) ? q.tags : []
+                    tags: tags.map(t => ({
+                        name: t?.name || "-",
+                        slug: (t?.slug || "").toString().trim()
+                    }))
                 };
             }
 
             function sortNewest(a, b) { return new Date(b.created) - new Date(a.created); }
-            function sortTopScore(a, b) { return b.score - a.score; }
-            function sortPopular(a, b) { return (b.viewCount - a.viewCount && b.score - a.score); }
+            function sortPopular(a, b) { return (b.viewCount - a.viewCount) || (b.answerCount - a.answerCount); }
 
             function applyFilterAndRender() {
                 const search = ($("#txtSearch").val() || "").toString().trim().toLowerCase();
@@ -162,8 +164,6 @@
                     data = data
                         .filter(q => q.answerCount === 0 && currentUserId && q.appUserId === currentUserId)
                         .sort(sortNewest);
-                } else if (activeFilter === "topscore") {
-                    data = data.sort(sortTopScore);
                 } else if (activeFilter === "popular") {
                     data = data.sort(sortPopular);
                 } else {
@@ -189,8 +189,15 @@
                 $("#questionCount").text(`${list.length} soru`);
 
                 list.forEach(q => {
+                    const questionSlug = (q.slug || "").trim();
+                    const questionUrl = questionSlug ? `/Questions/${encodeURIComponent(questionSlug)}` : "#";
+
                     const tagsHtml = q.tags.length
-                        ? q.tags.map(t => `<span class="badge text-bg-light border me-1 mb-1">#${t.name}</span>`).join("")
+                        ? q.tags.map(t => {
+                            const tagSlug = (t.slug || "").trim();
+                            const tagUrl = tagSlug ? `/Tags/${encodeURIComponent(tagSlug)}` : "#";
+                            return `<a href="${tagUrl}" class="badge text-bg-light border me-1 mb-1 text-decoration-none">#${t.name}</a>`;
+                        }).join("")
                         : `<span class="text-muted small">Etiket yok</span>`;
 
                     const html = `
@@ -198,10 +205,6 @@
                             <div class="card-body">
                                 <div class="d-flex flex-column flex-lg-row gap-3">
                                     <div class="d-flex flex-lg-column gap-2">
-                                        <div class="meta-box border rounded-3 p-2 text-center">
-                                            <div class="fw-bold">${q.score}</div>
-                                            <small class="text-muted">Vote</small>
-                                        </div>
                                         <div class="meta-box border rounded-3 p-2 text-center">
                                             <div class="fw-bold">${q.answerCount}</div>
                                             <small class="text-muted">Cevap</small>
@@ -213,7 +216,9 @@
                                     </div>
 
                                     <div class="flex-grow-1">
-                                        <h5 class="fw-bold mb-2">${q.title}</h5>
+                                        <h5 class="fw-bold mb-2">
+                                            <a href="${questionUrl}" class="text-decoration-none">${q.title}</a>
+                                        </h5>
                                         <p class="text-muted question-content mb-3">${q.content}</p>
 
                                         <div class="mb-3">${tagsHtml}</div>

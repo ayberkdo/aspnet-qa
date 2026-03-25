@@ -1,0 +1,180 @@
+@{
+    ViewData["Title"] = "Etiket Detayı";
+}
+
+<div class="container py-4">
+    <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3 mb-4">
+        <div>
+            <h1 id="tagTitle" class="h3 fw-bold mb-1">#etiket</h1>
+            <p class="text-muted mb-0">Bu etikete ait sorular.</p>
+        </div>
+        <span id="questionCount" class="badge rounded-pill text-bg-primary fs-6 px-3 py-2">0 soru</span>
+    </div>
+
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-body">
+            <div class="input-group">
+                <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
+                <input id="txtSearch" type="text" class="form-control" placeholder="Bu etikette soru ara..." />
+            </div>
+        </div>
+    </div>
+
+    <div id="loadingBox" class="text-center py-5">
+        <div class="spinner-border text-primary" role="status"></div>
+        <p class="text-muted mt-3 mb-0">Etiket detayları yükleniyor...</p>
+    </div>
+
+    <div id="emptyBox" class="alert alert-light border text-center d-none">
+        Bu etikette henüz soru yok.
+    </div>
+
+    <div id="questionsList" class="d-grid gap-3"></div>
+</div>
+
+<style>
+    .question-content {
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+
+    .meta-box {
+        min-width: 96px;
+    }
+</style>
+
+@section Scripts {
+<script>
+$(function () {
+    const apiBaseUrl = "@ViewBag.ApiBaseURL".replace(/\/$/, "");
+    const slug = "@ViewBag.Slug";
+
+    let allQuestions = [];
+
+    function escapeHtml(v) {
+        return (v ?? "").toString()
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#39;");
+    }
+
+    function toRelativeTime(dateValue) {
+        const dt = new Date(dateValue);
+        if (Number.isNaN(dt.getTime())) return "Bilinmiyor";
+
+        const sec = Math.floor((Date.now() - dt.getTime()) / 1000);
+        if (sec < 60) return "Az önce";
+
+        const min = Math.floor(sec / 60);
+        if (min < 60) return `${min} dakika önce`;
+
+        const hour = Math.floor(min / 60);
+        if (hour < 24) return `${hour} saat önce`;
+
+        const day = Math.floor(hour / 24);
+        if (day < 7) return `${day} gün önce`;
+
+        const month = Math.floor(day / 30);
+        if (month < 12) return `${month} ay önce`;
+
+        const year = Math.floor(day / 365);
+        return `${year} yıl önce`;
+    }
+
+    function normalizeQuestion(q) {
+        return {
+            id: q?.id ?? 0,
+            slug: (q?.slug || "").toString().trim(),
+            title: q?.title || "-",
+            content: q?.content || "",
+            answerCount: Number(q?.answerCount) || 0,
+            viewCount: Number(q?.viewCount) || 0,
+            created: q?.created
+        };
+    }
+
+    function render(list) {
+        const $list = $("#questionsList");
+        const $empty = $("#emptyBox");
+
+        $list.empty();
+
+        if (!list.length) {
+            $("#questionCount").text("0 soru");
+            $empty.removeClass("d-none");
+            return;
+        }
+
+        $empty.addClass("d-none");
+        $("#questionCount").text(`${list.length} soru`);
+
+        list.forEach(q => {
+            const qUrl = q.slug ? `/Questions/${encodeURIComponent(q.slug)}` : "#";
+
+            const html = `
+                <div class="card border-0 shadow-sm">
+                    <div class="card-body">
+                        <div class="d-flex flex-column flex-lg-row gap-3">
+                            <div class="d-flex flex-lg-column gap-2">
+                                <div class="meta-box border rounded-3 p-2 text-center">
+                                    <div class="fw-bold">${q.answerCount}</div>
+                                    <small class="text-muted">Cevap</small>
+                                </div>
+                                <div class="meta-box border rounded-3 p-2 text-center">
+                                    <div class="fw-bold">${q.viewCount}</div>
+                                    <small class="text-muted">Görüntüleme</small>
+                                </div>
+                            </div>
+
+                            <div class="flex-grow-1">
+                                <h5 class="fw-bold mb-2">
+                                    <a href="${qUrl}" class="text-decoration-none">${escapeHtml(q.title)}</a>
+                                </h5>
+                                <p class="text-muted question-content mb-2">${escapeHtml(q.content)}</p>
+                                <small class="text-muted">${toRelativeTime(q.created)}</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>`;
+
+            $list.append(html);
+        });
+    }
+
+    function applySearchAndRender() {
+        const search = ($("#txtSearch").val() || "").toString().trim().toLowerCase();
+
+        const data = allQuestions
+            .filter(q =>
+                q.title.toLowerCase().includes(search) ||
+                q.content.toLowerCase().includes(search))
+            .sort((a, b) => new Date(b.created) - new Date(a.created));
+
+        render(data);
+    }
+
+    $.get(`${apiBaseUrl}/Tag/slug/${encodeURIComponent(slug)}`)
+        .done(function (res) {
+            const tag = res?.tag || {};
+            allQuestions = (Array.isArray(res?.questions) ? res.questions : []).map(normalizeQuestion);
+
+            $("#tagTitle").text(`#${tag?.name || "etiket"}`);
+            applySearchAndRender();
+        })
+        .fail(function () {
+            $("#contentBox").removeClass("d-none").html(`<div class="alert alert-danger">Etiket bulunamadı.</div>`);
+            $("#emptyBox").addClass("d-none");
+        })
+        .always(function () {
+            $("#loadingBox").addClass("d-none");
+        });
+
+    $("#txtSearch").on("input", applySearchAndRender);
+});
+</script>
+}

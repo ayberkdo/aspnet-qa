@@ -46,7 +46,6 @@
 @section Scripts {
     <script>
         $(document).ready(function () {
-            // URL işlemlerini basitleştirdik, direkt değişkene bağladık
             const apiBaseUrl = "@ViewBag.ApiBaseURL";
             const DEFAULT_PHOTO = "/Files/UserPhotos/default-profile-photo.jpg";
             const NEW_USER_DAYS = 30;
@@ -59,13 +58,28 @@
             const $usersGrid = $("#usersGrid");
             const $userCount = $("#userCount");
 
-            // Fotoğraf yolunu düzenleyen fonksiyon (Artık apiOrigin bağımlılığı yok)
+            function getCurrentUserName() {
+                const token = localStorage.getItem("token");
+                if (!token) return null;
+
+                try {
+                    const payload = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+                    const json = decodeURIComponent(escape(window.atob(payload)));
+                    const obj = JSON.parse(json);
+
+                    return obj["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name"]
+                        || obj.unique_name
+                        || obj.name
+                        || null;
+                } catch {
+                    return null;
+                }
+            }
+
             function normalizePhoto(photoUrl) {
                 if (!photoUrl || photoUrl.trim() === "") {
                     return DEFAULT_PHOTO;
                 }
-
-                // Değilse, gelen değeri olduğu gibi kullan
                 return photoUrl;
             }
 
@@ -96,22 +110,34 @@
                 $emptyBox.addClass("d-none");
                 $userCount.text(`${list.length} kullanıcı`);
 
+                const currentUserName = (getCurrentUserName() || "").toLowerCase();
+
                 list.forEach(function (u) {
                     const role = (u.role || "User").trim();
                     const roleBadge = role.toLowerCase() === "admin"
                         ? `<span class="badge text-bg-warning">Admin</span>`
                         : `<span class="badge text-bg-secondary">${role}</span>`;
 
+                    const cardUserName = (u.userName || "").trim();
+                    const isCurrentUser = currentUserName && cardUserName && currentUserName === cardUserName.toLowerCase();
+                    const profileUrl = isCurrentUser
+                        ? "/Profile/Index"
+                        : (cardUserName ? `/Profile/${encodeURIComponent(cardUserName)}` : "#");
+
                     const card = `
                         <div class="col-12 col-sm-6 col-lg-3">
                             <div class="card h-100 border-0 shadow-sm rounded-4">
                                 <div class="card-body text-center p-4">
-                                    <img src="${normalizePhoto(u.photoUrl)}"
-                                            alt="${u.userName || "Kullanıcı"}"
-                                            class="rounded-circle border shadow-sm mb-3"
-                                            style="width:88px;height:88px;object-fit:cover;"
-                                            onerror="this.onerror=null;this.src='${DEFAULT_PHOTO}';" />
-                                    <h6 class="fw-bold mb-1">@@${u.userName || "-"}</h6>
+                                    <a href="${profileUrl}" class="text-decoration-none">
+                                        <img src="${normalizePhoto(u.photoUrl)}"
+                                             alt="${u.userName || "Kullanıcı"}"
+                                             class="rounded-circle border shadow-sm mb-3"
+                                             style="width:88px;height:88px;object-fit:cover;"
+                                             onerror="this.onerror=null;this.src='${DEFAULT_PHOTO}';" />
+                                    </a>
+                                    <h6 class="fw-bold mb-1">
+                                        <a href="${profileUrl}" class="text-decoration-none text-dark">@@${u.userName || "-"}</a>
+                                    </h6>
                                     <div class="text-muted small mb-2">${formatDate(u.createdAt)}</div>
                                     ${roleBadge}
                                 </div>
@@ -145,7 +171,6 @@
                 $emptyBox.addClass("d-none");
                 $usersGrid.empty();
 
-                // AJAX isteğinde apiBaseUrl doğrudan kullanılıyor
                 const url = apiBaseUrl.endsWith("/") ? apiBaseUrl + "User/List" : apiBaseUrl + "/User/List";
 
                 $.ajax({

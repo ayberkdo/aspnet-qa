@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using aspnet_qa.API.Models;
 
@@ -11,9 +12,11 @@ using aspnet_qa.API.Models;
 namespace aspnet_qa.API.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260325184158_AddSlugToQuestionAndTag")]
+    partial class AddSlugToQuestionAndTag
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -156,6 +159,9 @@ namespace aspnet_qa.API.Migrations
                     b.Property<int>("QuestionId")
                         .HasColumnType("int");
 
+                    b.Property<int>("Score")
+                        .HasColumnType("int");
+
                     b.Property<DateTime>("Updated")
                         .HasColumnType("datetime2");
 
@@ -293,6 +299,9 @@ namespace aspnet_qa.API.Migrations
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
 
+                    b.Property<int>("Score")
+                        .HasColumnType("int");
+
                     b.Property<string>("Slug")
                         .IsRequired()
                         .HasMaxLength(220)
@@ -367,6 +376,47 @@ namespace aspnet_qa.API.Migrations
                         .HasFilter("[Slug] IS NOT NULL AND [Slug] <> ''");
 
                     b.ToTable("Tags");
+                });
+
+            modelBuilder.Entity("aspnet_qa.API.Models.Vote", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int?>("AnswerId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("AppUserId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime>("Created")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<int?>("QuestionId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("Updated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Value")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AnswerId");
+
+                    b.HasIndex("AppUserId");
+
+                    b.HasIndex("QuestionId");
+
+                    b.ToTable("Votes");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>", b =>
@@ -469,11 +519,41 @@ namespace aspnet_qa.API.Migrations
                     b.Navigation("Tag");
                 });
 
+            modelBuilder.Entity("aspnet_qa.API.Models.Vote", b =>
+                {
+                    b.HasOne("aspnet_qa.API.Models.Answer", "Answer")
+                        .WithMany("Votes")
+                        .HasForeignKey("AnswerId");
+
+                    b.HasOne("aspnet_qa.API.Models.AppUser", "AppUser")
+                        .WithMany()
+                        .HasForeignKey("AppUserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("aspnet_qa.API.Models.Question", "Question")
+                        .WithMany("Votes")
+                        .HasForeignKey("QuestionId");
+
+                    b.Navigation("Answer");
+
+                    b.Navigation("AppUser");
+
+                    b.Navigation("Question");
+                });
+
+            modelBuilder.Entity("aspnet_qa.API.Models.Answer", b =>
+                {
+                    b.Navigation("Votes");
+                });
+
             modelBuilder.Entity("aspnet_qa.API.Models.Question", b =>
                 {
                     b.Navigation("Answers");
 
                     b.Navigation("QuestionTags");
+
+                    b.Navigation("Votes");
                 });
 
             modelBuilder.Entity("aspnet_qa.API.Models.Tag", b =>

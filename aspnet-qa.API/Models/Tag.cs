@@ -1,8 +1,9 @@
 ﻿namespace aspnet_qa.API.Models
 {
-    public class Tag:BaseEntity
+    public class Tag : BaseEntity
     {
-        public string Name { get; set; } // Örn: c#, asp.net-core
+        public string Name { get; set; }
+        public string Slug { get; set; } // yeni
         public ICollection<QuestionTag> QuestionTags { get; set; }
     }
 }
